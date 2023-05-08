@@ -34,55 +34,62 @@ import java.util.concurrent.TimeUnit;
  * @author nkorange
  */
 public class ClientBeatProcessor implements Runnable {
-    
+
     public static final long CLIENT_BEAT_TIMEOUT = TimeUnit.SECONDS.toMillis(15);
-    
+
     private RsInfo rsInfo;
-    
+
     private Service service;
-    
+
     @JsonIgnore
     public PushService getPushService() {
         return ApplicationUtils.getBean(PushService.class);
     }
-    
+
     public RsInfo getRsInfo() {
         return rsInfo;
     }
-    
+
     public void setRsInfo(RsInfo rsInfo) {
         this.rsInfo = rsInfo;
     }
-    
+
     public Service getService() {
         return service;
     }
-    
+
     public void setService(Service service) {
         this.service = service;
     }
-    
+
     @Override
     public void run() {
         Service service = this.service;
         if (Loggers.EVT_LOG.isDebugEnabled()) {
             Loggers.EVT_LOG.debug("[CLIENT-BEAT] processing beat: {}", rsInfo.toString());
         }
-        
+
+        // 获取 ip、clusterName
         String ip = rsInfo.getIp();
         String clusterName = rsInfo.getCluster();
         int port = rsInfo.getPort();
         Cluster cluster = service.getClusterMap().get(clusterName);
+        // 获取 当前 cluster 下所有临时实例
         List<Instance> instances = cluster.allIPs(true);
-        
+
+        // 遍历临时实例
         for (Instance instance : instances) {
+            // 判断 ip 、 port ，只操作当前发送心跳检查的 instance 实例
             if (instance.getIp().equals(ip) && instance.getPort() == port) {
                 if (Loggers.EVT_LOG.isDebugEnabled()) {
                     Loggers.EVT_LOG.debug("[CLIENT-BEAT] refresh beat: {}", rsInfo.toString());
                 }
+                // 修改心跳时间是当前时间
                 instance.setLastBeat(System.currentTimeMillis());
                 if (!instance.isMarked()) {
+                    // 如果之前不是健康的
                     if (!instance.isHealthy()) {
+                        // 现在变成健康的
                         instance.setHealthy(true);
                         Loggers.EVT_LOG
                                 .info("service: {} {POS} {IP-ENABLED} valid: {}:{}@{}, region: {}, msg: client beat ok",
